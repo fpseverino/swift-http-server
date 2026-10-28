@@ -73,5 +73,18 @@ extension HTTP3.HTTP3Settings {
         )
     }
     #endif  // UnstableHTTPDatagrams
+
+    #if UnstableWebTransport
+    init(_ connectionConfiguration: NIOHTTPServerConfiguration.HTTP3.ConnectionSettings, supportsWebTransport: Bool) {
+        self.init(
+            qpackMaximumTableCapacity: connectionConfiguration.qpackMaximumTableCapacity,
+            qpackBlockedStreams: connectionConfiguration.qpackBlockedStreams,
+            maximumFieldSectionSize: connectionConfiguration.maximumFieldSectionSize,
+            h3Datagram: supportsWebTransport,
+            enableConnectProtocol: supportsWebTransport
+        )
+    }
+    #endif  // UnstableWebTransport
+
 }
 #endif  // HTTP3

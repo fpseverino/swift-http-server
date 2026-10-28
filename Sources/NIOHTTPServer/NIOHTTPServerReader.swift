@@ -13,9 +13,14 @@
 //===----------------------------------------------------------------------===//
 
 public import BasicContainers
-import NIOCore
 import NIOHTTPTypes
 import Synchronization
+
+#if UnstableWebTransport
+public import NIOCore
+#else
+import NIOCore
+#endif
 
 @available(anyAppleOS 27.0, *)
 extension NIOHTTPServer {
@@ -74,6 +79,11 @@ extension NIOHTTPServer {
             self.state = readerState
             self.iterator = readerState.takeIterator()
             self.buffer = UniqueArray<UInt8>()
+
+            #if UnstableWebTransport
+            self.webTransportIncomingUnidirectionalStreams = AsyncStream { $0.finish() }
+            self.webTransportIncomingBidirectionalStreams = AsyncStream { $0.finish() }
+            #endif
         }
 
         #if HTTP3 && UnstableHTTPDatagrams
@@ -88,6 +98,36 @@ extension NIOHTTPServer {
             self.iterator = readerState.takeIterator()
             self.buffer = UniqueArray<UInt8>()
             self.datagramStreamFuture = datagramStreamFuture
+
+            #if UnstableWebTransport
+            self.webTransportIncomingUnidirectionalStreams = AsyncStream { $0.finish() }
+            self.webTransportIncomingBidirectionalStreams = AsyncStream { $0.finish() }
+            #endif
+        }
+        #endif
+
+        #if UnstableWebTransport
+        /// An asynchronous sequence of unidirectional streams opened by the client.
+        public let webTransportIncomingUnidirectionalStreams: AsyncStream<NIOAsyncChannel<ByteBuffer, Never>>
+        /// An asynchronous sequence of bidirectional streams opened by the client.
+        public let webTransportIncomingBidirectionalStreams: AsyncStream<NIOAsyncChannel<ByteBuffer, ByteBuffer>>
+
+        /// Initializes a new request body reader
+        /// that can also vend an unreliable datagram reader
+        /// and incoming WebTransport streams
+        /// if the underlying transport supports unreliable datagrams.
+        init(
+            readerState: ReaderState,
+            datagramStreamFuture: EventLoopFuture<HTTP3UnreliableDatagramStream>? = nil,
+            webTransportIncomingUnidirectionalStreams: AsyncStream<NIOAsyncChannel<ByteBuffer, Never>>,
+            webTransportIncomingBidirectionalStreams: AsyncStream<NIOAsyncChannel<ByteBuffer, ByteBuffer>>
+        ) {
+            self.state = readerState
+            self.iterator = readerState.takeIterator()
+            self.buffer = UniqueArray<UInt8>()
+            self.datagramStreamFuture = datagramStreamFuture
+            self.webTransportIncomingUnidirectionalStreams = webTransportIncomingUnidirectionalStreams
+            self.webTransportIncomingBidirectionalStreams = webTransportIncomingBidirectionalStreams
         }
         #endif
 

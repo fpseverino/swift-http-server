@@ -23,13 +23,18 @@ import NIOQUIC
 import NIOQUICHelpers
 import X509
 
+#endif
+
 @main
 @available(anyAppleOS 27.0, *)
 struct WebTransportExample {
     static func main() async throws {
+        #if UnstableWebTransport
         try await serve()
+        #endif
     }
 
+    #if UnstableWebTransport
     @concurrent
     static func serve() async throws {
         var rootLogger = Logger(label: "WebTransportExample")
@@ -44,27 +49,38 @@ struct WebTransportExample {
                 )
             )
 
+            // The example uses the `serve` method that exposes the connection, not the "default" one
             try await server.serve { connection, requestContext in
+                // The QUIC stream creator can be accessed from the connection to create WebTransport streams
                 guard let webTransportStreamCreator = try await connection.webTransportStreamCreator else {
                     fatalError("QUIC stream creator is not available")
                 }
 
+                // We then handle incoming requests (in this case WebTransport sessions) for this connection
                 await connection.handleRequests { request, requestContext, reader, responseSender in
+                    // First, we validate that the incoming request is a valid request for a WebTransport session
                     guard WebTransportHelper.isValidWebTransportRequest(request) else {
                         return try await responseSender.sendAndFinish(.init(status: .forbidden))
                     }
 
                     var streamReader = reader
+                    // Then we take the datagram reader from the stream reader to handle incoming datagrams
                     guard let datagramReader = await streamReader.takeDatagramReader() else {
                         return try await responseSender.sendAndFinish(.init(status: .notImplemented))
                     }
 
+                    // Next, we get the incoming streams from the stream reader
+                    let incomingUnidirectionalStreams = streamReader.webTransportIncomingUnidirectionalStreams
+                    let incomingBidirectionalStreams = streamReader.webTransportIncomingBidirectionalStreams
+
                     // let streamReaderBox = RefBox(value: Disconnected(value: streamReader))
                     let datagramReaderBox = RefBox(value: Disconnected(value: datagramReader))
 
+                    // We send the response to the client indicating that the WebTransport session has been successfully established
                     var streamWriter = try await responseSender.send(
                         WebTransportHelper.makeSuccessResponse(headerFields: request.headerFields)
                     )
+                    // We then take the datagram writer from the stream writer to handle outgoing datagrams
                     let datagramWriter = await streamWriter.takeDatagramWriter()
 
                     // let streamWriterBox = RefBox(value: Disconnected(value: streamWriter))
@@ -78,6 +94,7 @@ struct WebTransportExample {
                         var disconnectedDatagramWriter = datagramWriterBox.unbox()
                         if var unwrappedDatagramWriter = disconnectedDatagramWriter.swap(newValue: nil) {
                             group.addTask {
+                                // Echoes incoming datagrams back to the client
                                 try await unwrappedDatagramReader.read { buffer, _ in
                                     try await unwrappedDatagramWriter.write(buffer: &buffer)
                                 }
@@ -85,20 +102,54 @@ struct WebTransportExample {
                         }
 
                         group.addTask {
-                            try await webTransportStreamCreator.withUnidirectionalStream(
-                                requestContext: requestContext
-                            ) { outbound in
-                                try await outbound.write(ByteBuffer(string: "opened"))
+                            try await withThrowingDiscardingTaskGroup { streamsGroup in
+                                // Iterate over all incoming unidirectional streams from the client
+                                for await stream in incomingUnidirectionalStreams {
+                                    streamsGroup.addTask {
+                                        // Each stream is a `NIOAsyncChannel`
+                                        try await stream.executeThenClose { inbound in
+                                            for try await message in inbound {
+                                                // Custom logic
+                                                if String(buffer: message) == "open" {
+                                                    try await webTransportStreamCreator.withUnidirectionalStream(
+                                                        requestContext: requestContext
+                                                    ) { outbound in
+                                                        try await outbound.write(ByteBuffer(string: "opened"))
+                                                    }
+                                                } else {
+                                                    print("Received on uni stream: \(String(buffer: message))")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
                         group.addTask {
-                            try await webTransportStreamCreator.withBidirectionalStream(
-                                requestContext: requestContext
-                            ) { inbound, outbound in
-                                try await outbound.write(ByteBuffer(string: "opened"))
-                                for try await message in inbound {
-                                    try await outbound.write(message)
+                            try await withThrowingDiscardingTaskGroup { streamsGroup in
+                                // Iterate over all incoming bidirectional streams from the client
+                                for await stream in incomingBidirectionalStreams {
+                                    streamsGroup.addTask {
+                                        // Each bidirectional stream is a `NIOAsyncChannel`
+                                        try await stream.executeThenClose { inbound, outbound in
+                                            for try await message in inbound {
+                                                // Custom logic
+                                                if String(buffer: message) == "open" {
+                                                    try await webTransportStreamCreator.withBidirectionalStream(
+                                                        requestContext: requestContext
+                                                    ) { inbound, outbound in
+                                                        try await outbound.write(ByteBuffer(string: "opened"))
+                                                        for try await message in inbound {
+                                                            try await outbound.write(message)
+                                                        }
+                                                    }
+                                                } else {
+                                                    try await outbound.write(message)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -107,7 +158,10 @@ struct WebTransportExample {
             }
         }
     }
+    #endif
 }
+
+#if UnstableWebTransport
 
 @available(anyAppleOS 27.0, *)
 enum WebTransportHelper {
@@ -216,4 +270,4 @@ final class RefBox<Value: ~Copyable> {
 }
 extension RefBox: Sendable where Value: Sendable & ~Copyable {}
 
-#endif  // HTTP3 && UnstableHTTPDatagrams
+#endif

@@ -367,6 +367,47 @@ public struct NIOHTTPServer: HTTPServer {
         return readerState.takeIterator()
     }
 
+    #if UnstableWebTransport
+    func invokeWebTransportEnabledHandler<Handler: HTTPServerRequestHandler>(
+        request: HTTPRequest,
+        requestContext: RequestContext,
+        inboundIterator: consuming sending NIOAsyncChannelInboundStream<HTTPRequestPart>.AsyncIterator,
+        outbound: NIOAsyncChannelOutboundWriter<HTTPResponsePart>,
+        datagramStreamFuture: EventLoopFuture<HTTP3UnreliableDatagramStream>,
+        webTransportIncomingUnidirectionalStreams: AsyncStream<NIOAsyncChannel<ByteBuffer, Never>>,
+        webTransportIncomingBidirectionalStreams: AsyncStream<NIOAsyncChannel<ByteBuffer, ByteBuffer>>,
+        handler: Handler
+    ) async
+    where
+        Handler.RequestContext == RequestContext,
+        Handler.Reader == Reader,
+        Handler.ResponseSender == ResponseSender
+    {
+        let readerState = Reader.ReaderState(iterator: inboundIterator)
+        let writerState = ResponseSender.WriterState()
+
+        let requestReader = Reader(
+            readerState: readerState,
+            datagramStreamFuture: datagramStreamFuture,
+            webTransportIncomingUnidirectionalStreams: webTransportIncomingUnidirectionalStreams,
+            webTransportIncomingBidirectionalStreams: webTransportIncomingBidirectionalStreams
+        )
+        let responseSender = ResponseSender(
+            writer: outbound,
+            writerState: writerState,
+            datagramStreamFuture: datagramStreamFuture
+        )
+
+        _ = await self.invokeHandler(
+            request: request,
+            requestContext: requestContext,
+            requestReader: requestReader,
+            responseSender: responseSender,
+            handler: handler
+        )
+    }
+    #endif  // UnstableWebTransport
+
     #if HTTP3 && UnstableHTTPDatagrams
     func invokeDatagramsEnabledHandler<Handler: HTTPServerRequestHandler>(
         request: HTTPRequest,
