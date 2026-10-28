@@ -86,7 +86,7 @@ final class WebTransportIncomingBidirectionalStreamsChannelHandler: ChannelInbou
             signalValue == 0x41,
             let sessionID = buffer.readEncodedInteger(as: UInt64.self, strategy: .quic)
         else {
-            guard #available(anyAppleOS 26, *) else { fatalError("WebTransport requires anyAppleOS 26 or later") }
+            guard #available(anyAppleOS 27, *) else { fatalError("WebTransport requires anyAppleOS 27 or later") }
             context.channel.parent!.pipeline.handler(type: HTTP3ConnectionHandler<NIOQUIC.QUICStreamCreator>.self)
                 .assumeIsolated()
                 .whenComplete { result in
