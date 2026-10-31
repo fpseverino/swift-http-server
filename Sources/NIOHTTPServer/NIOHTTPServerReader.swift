@@ -81,8 +81,8 @@ extension NIOHTTPServer {
             self.buffer = UniqueArray<UInt8>()
 
             #if UnstableWebTransport
-            self.webTransportIncomingUnidirectionalStreams = AsyncStream { $0.finish() }
-            self.webTransportIncomingBidirectionalStreams = AsyncStream { $0.finish() }
+            self.webTransportIncomingUnidirectionalStreams = nil
+            self.webTransportIncomingBidirectionalStreams = nil
             #endif
         }
 
@@ -100,17 +100,17 @@ extension NIOHTTPServer {
             self.datagramStreamFuture = datagramStreamFuture
 
             #if UnstableWebTransport
-            self.webTransportIncomingUnidirectionalStreams = AsyncStream { $0.finish() }
-            self.webTransportIncomingBidirectionalStreams = AsyncStream { $0.finish() }
+            self.webTransportIncomingUnidirectionalStreams = nil
+            self.webTransportIncomingBidirectionalStreams = nil
             #endif
         }
         #endif
 
         #if UnstableWebTransport
         /// An asynchronous sequence of unidirectional streams opened by the client.
-        public let webTransportIncomingUnidirectionalStreams: AsyncStream<NIOAsyncChannel<ByteBuffer, Never>>
+        public let webTransportIncomingUnidirectionalStreams: AsyncStream<NIOAsyncChannel<ByteBuffer, Never>>?
         /// An asynchronous sequence of bidirectional streams opened by the client.
-        public let webTransportIncomingBidirectionalStreams: AsyncStream<NIOAsyncChannel<ByteBuffer, ByteBuffer>>
+        public let webTransportIncomingBidirectionalStreams: AsyncStream<NIOAsyncChannel<ByteBuffer, ByteBuffer>>?
 
         /// Initializes a new request body reader
         /// that can also vend an unreliable datagram reader

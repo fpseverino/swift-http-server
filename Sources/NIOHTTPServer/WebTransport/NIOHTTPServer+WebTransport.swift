@@ -121,7 +121,7 @@ extension NIOHTTPServer.RequestContext {
     /// This is only available if the connection is using HTTP/3.
     var quicStreamID: NIOQUICHelpers.QUICStreamID {
         get async throws {
-            QUICStreamID(rawValue: try await self.channel.getOption(.quicStreamID).get())
+            QUICStreamID(rawValue: try await self.channel.getOption(.quicStreamID))
         }
     }
 }

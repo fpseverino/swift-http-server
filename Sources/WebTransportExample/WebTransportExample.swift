@@ -70,8 +70,14 @@ struct WebTransportExample {
                     }
 
                     // Next, we get the incoming streams from the stream reader
-                    let incomingUnidirectionalStreams = streamReader.webTransportIncomingUnidirectionalStreams
-                    let incomingBidirectionalStreams = streamReader.webTransportIncomingBidirectionalStreams
+                    guard let incomingUnidirectionalStreams = streamReader.webTransportIncomingUnidirectionalStreams
+                    else {
+                        return try await responseSender.sendAndFinish(.init(status: .notImplemented))
+                    }
+                    guard let incomingBidirectionalStreams = streamReader.webTransportIncomingBidirectionalStreams
+                    else {
+                        return try await responseSender.sendAndFinish(.init(status: .notImplemented))
+                    }
 
                     // let streamReaderBox = RefBox(value: Disconnected(value: streamReader))
                     let datagramReaderBox = RefBox(value: Disconnected(value: datagramReader))

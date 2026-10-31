@@ -157,7 +157,6 @@ let package = Package(
         .executableTarget(
             name: "WebTransportExample",
             dependencies: [
-                "ExampleSupport",
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "NIOHTTP3", package: "swift-nio-http3", condition: .when(traits: ["HTTP3"])),
                 "NIOHTTPServer",
